@@ -1,0 +1,17 @@
+command:
+  - gunicorn
+  - app_ai:app
+  - --bind
+  - 0.0.0.0:$DATABRICKS_APP_PORT
+
+env:
+  - name: DATABRICKS_WAREHOUSE_ID
+    valueFrom: sql-warehouse
+  - name: SITE_OVERVIEW_VIEW
+    valueFrom: site_overview
+  - name: SITE_INCIDENT_DETAIL_VIEW
+    valueFrom: site_incident_detail
+  - name: SITE_MAINTENANCE_DETAIL_VIEW
+    valueFrom: site_maintenance_detail
+  - name: ENDPOINT_NAME
+    valueFrom: serving-endpoint

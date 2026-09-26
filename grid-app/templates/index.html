@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Grid Bricks</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="/static/styles.css">
+  <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+</head>
+<body>
+  <main class="page">
+    <section class="top-grid">
+      <section class="hero">
+        <div class="brand-row">
+          <div class="brand-mark" aria-hidden="true"></div>
+          <div class="brand-text">Databricks Academy</div>
+        </div>
+
+        <h1>Grid Bricks</h1>
+        <p class="lede">
+          Tranforming current data into operational intelligence.
+        </p>
+      </section>
+
+      <section class="summary-grid" id="summary">
+        <div class="summary-card"><span>Sites monitored</span><strong>—</strong></div>
+        <div class="summary-card"><span>Critical sites</span><strong>—</strong></div>
+        <div class="summary-card"><span>Active incidents</span><strong>—</strong></div>
+        <div class="summary-card"><span>Average load</span><strong>—</strong></div>
+      </section>
+    </section>
+
+    <section class="content-grid">
+      <section class="card table-card">
+        <div class="section-header">
+          <div>
+            <p class="eyebrow">Current State</p>
+            <h2>Utility Sites</h2>
+          </div>
+          <button id="refresh-button">Refresh</button>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Site</th>
+                <th>Region</th>
+                <th>Status</th>
+                <th>Load</th>
+                <th>Health</th>
+                <th>Incidents</th>
+              </tr>
+            </thead>
+            <tbody id="sites-body">
+              <tr><td colspan="6" class="muted">Loading sites...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <aside class="card detail-card" id="detail">
+        <p class="eyebrow">Site Detail</p>
+        <h2>Select a site</h2>
+        <p class="muted">
+          Choose a utility site to view current metrics, active incidents, and upcoming maintenance.
+        </p>
+      </aside>
+    </section>
+
+    <footer class="footer">
+      Demo application only. All sites, operational data, and events shown are fictional and provided solely for educational purposes.
+    </footer>
+  </main>
+
+  <script>
+    const summaryEl = document.querySelector("#summary");
+    const sitesBody = document.querySelector("#sites-body");
+    const detailEl = document.querySelector("#detail");
+    const refreshButton = document.querySelector("#refresh-button");
+
+    const statusRank = {
+      Critical: 1,
+      Warning: 2,
+      Elevated: 3,
+      Normal: 4
+    };
+
+    function fmt(value, suffix = "") {
+      return value === null || value === undefined ? "—" : `${value}${suffix}`;
+    }
+
+    function statusClass(status) {
+      return `status status-${String(status || "unknown").toLowerCase()}`;
+    }
+
+    async function loadSummary() {
+      const response = await fetch("/api/summary");
+      const data = await response.json();
+
+      summaryEl.innerHTML = `
+        <div class="summary-card"><span>Sites monitored</span><strong>${fmt(data.sites_monitored)}</strong></div>
+        <div class="summary-card"><span>Critical sites</span><strong>${fmt(data.critical_sites)}</strong></div>
+        <div class="summary-card"><span>Active incidents</span><strong>${fmt(data.active_incidents)}</strong></div>
+        <div class="summary-card"><span>Average load</span><strong>${fmt(data.average_load_pct, "%")}</strong></div>
+      `;
+    }
+
+    async function loadSites() {
+      const response = await fetch("/api/sites");
+      const sites = await response.json();
+
+      sitesBody.innerHTML = sites.map(site => `
+        <tr data-site-id="${site.site_id}">
+          <td>
+            <strong>${site.site_name}</strong>
+            <div class="muted">${site.city}, ${site.state_province}</div>
+          </td>
+          <td>${site.region}</td>
+          <td><span class="${statusClass(site.status)}">${site.status}</span></td>
+          <td>${fmt(site.load_pct, "%")}</td>
+          <td>${fmt(site.health_score)}</td>
+          <td>${fmt(site.active_incidents)}</td>
+        </tr>
+      `).join("");
+
+      document.querySelectorAll("tr[data-site-id]").forEach(row => {
+        row.addEventListener("click", () => loadSiteDetails(row.dataset.siteId));
+      });
+    }
+
+    async function loadSiteDetails(siteId) {
+      detailEl.innerHTML = `
+        <p class="eyebrow">Site Detail</p>
+        <h2>Loading...</h2>
+        <p class="muted">Retrieving operational details for ${siteId}.</p>
+      `;
+
+      const response = await fetch(`/api/sites/${siteId}/details`);
+      const data = await response.json();
+
+      if (!response.ok) {
+        detailEl.innerHTML = `<p class="error">${data.error || "Could not load site details."}</p>`;
+        return;
+      }
+
+      const site = data.site;
+      const incidents = data.incidents || [];
+      const maintenance = data.maintenance || [];
+
+      detailEl.innerHTML = `
+        <p class="eyebrow">${site.site_id}</p>
+        <h2>${site.site_name}</h2>
+        <p class="muted">${site.city}, ${site.state_province} · ${site.site_type}</p>
+
+        <div class="detail-metrics">
+          <div><span>Status</span><strong><span class="${statusClass(site.status)}">${site.status}</span></strong></div>
+          <div><span>Load</span><strong>${fmt(site.load_pct, "%")}</strong></div>
+          <div><span>Health</span><strong>${fmt(site.health_score)}</strong></div>
+          <div><span>Voltage</span><strong>${fmt(site.voltage_kv, " kV")}</strong></div>
+        </div>
+
+        <h3>Recent Incidents</h3>
+        <div class="stack">
+          ${incidents.length ? incidents.map(i => `
+            <div class="mini-card">
+              <div class="mini-card-title">
+                <strong>${i.incident_type}</strong>
+                <span class="pill">${i.severity}</span>
+              </div>
+              <p>${i.description}</p>
+              <p class="muted">${i.status}</p>
+            </div>
+          `).join("") : `<p class="muted">No incidents found for this site.</p>`}
+        </div>
+
+        <h3>Maintenance</h3>
+        <div class="stack">
+          ${maintenance.length ? maintenance.map(m => `
+            <div class="mini-card">
+              <div class="mini-card-title">
+                <strong>${m.maintenance_type}</strong>
+                <span class="pill">${m.status}</span>
+              </div>
+              <p class="muted">${m.assigned_team}</p>
+            </div>
+          `).join("") : `<p class="muted">No maintenance events found for this site.</p>`}
+        </div>
+      `;
+    }
+
+    async function refresh() {
+      await Promise.all([loadSummary(), loadSites()]);
+    }
+
+    refreshButton.addEventListener("click", refresh);
+    refresh();
+  </script>
+</body>
+</html>
